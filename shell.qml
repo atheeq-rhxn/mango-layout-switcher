@@ -16,6 +16,19 @@ PanelWindow {
 
     anchors { top: true; bottom: true; left: true; right: true }
 
+    //  Settings Persistence
+    FileView {
+        id: settingsFile
+        path: Quickshell.shellDir + "/mango-layout-switcher.json"
+        watchChanges: true
+        JsonAdapter {
+            id: settings
+            property var monitorOrder: []
+        }
+    }
+
+    function saveSettings() { settingsFile.writeAdapter() }
+
     //  Style 
     readonly property int fsS:  10
     readonly property int fsM:  11
@@ -165,21 +178,23 @@ PanelWindow {
     }
 
     //  App State 
-    property var savedMonitorOrder: []
+    readonly property var savedMonitorOrder: settings.monitorOrder
 
     property var orderedMonitors: {
         const all   = layoutState.availableMonitors
         const order = savedMonitorOrder
-        if (!order.length) return all
-        return order.filter(function(m) { return all.indexOf(m) !== -1 })
-            .concat(all.filter(function(m) { return order.indexOf(m) === -1 }))
+        if (!order?.length) return all
+        return order.filter(m => all.includes(m))
+            .concat(all.filter(m => !order.includes(m)))
     }
 
     function applyMonitorReorder(fromIndex, toIndex) {
         if (fromIndex === toIndex) return
         const arr = orderedMonitors.slice()
-        arr.splice(toIndex, 0, arr.splice(fromIndex, 1)[0])
-        savedMonitorOrder = arr
+        const item = arr.splice(fromIndex, 1)[0]
+        arr.splice(toIndex, 0, item)
+        settings.monitorOrder = arr
+        saveSettings()
     }
 
     readonly property string panelMonitor: orderedMonitors.length > 0 ? orderedMonitors[0] : ""
