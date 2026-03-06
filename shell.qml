@@ -217,54 +217,33 @@ PanelWindow {
 
     // Keyboard navigation state
     property int keyboardFocusedIndex: -1
+    property int hoveredIndex: -1
     property string lastFocusMethod: "hover"
     readonly property int gridColumns: 3
 
     function navigateKeyboard(direction) {
-        var count = layoutState.availableLayouts.length;
+        var layouts = layoutState.availableLayouts;
+        var count = layouts.length;
         if (count === 0) return;
 
-        var idx = keyboardFocusedIndex;
-        if (idx < 0 || idx >= count) {
-            var activeIdx = root.layouts.findIndex(l => l.code === root.activeLayout);
-            idx = activeIdx >= 0 ? activeIdx : 0;
+        var idx;
+        if (lastFocusMethod === "hover" && hoveredIndex >= 0 && hoveredIndex < count) {
+            idx = hoveredIndex;
+        } else if (keyboardFocusedIndex >= 0 && keyboardFocusedIndex < count) {
+            idx = keyboardFocusedIndex;
+        } else {
+            idx = root.layouts.findIndex(l => l.code === root.activeLayout);
+            if (idx < 0) idx = 0;
         }
 
-        var currentRow = Math.floor(idx / gridColumns);
-        var currentCol = idx % gridColumns;
-        var totalRows = Math.ceil(count / gridColumns);
+        var col = idx % gridColumns;
+        var row = Math.floor(idx / gridColumns);
 
         switch (direction) {
-            case "left":
-                if (currentCol > 0) {
-                    idx--;
-                } else {
-                    idx = currentRow * gridColumns + (gridColumns - 1);
-                    if (idx >= count) idx = count - 1;
-                }
-                break;
-            case "right":
-                if (currentCol < gridColumns - 1 && idx + 1 < count) {
-                    idx++;
-                } else {
-                    idx = currentRow * gridColumns;
-                }
-                break;
-            case "up":
-                if (currentRow > 0) {
-                    idx -= gridColumns;
-                } else {
-                    idx = (totalRows - 1) * gridColumns + currentCol;
-                    if (idx >= count) idx = count - 1;
-                }
-                break;
-            case "down":
-                if (idx + gridColumns < count) {
-                    idx += gridColumns;
-                } else {
-                    idx = currentCol;
-                }
-                break;
+            case "left":  idx = col > 0 ? idx - 1 : Math.min(idx + gridColumns - 1, count - 1); break;
+            case "right": idx = col < gridColumns - 1 && idx + 1 < count ? idx + 1 : row * gridColumns; break;
+            case "up":    idx = row > 0 ? idx - gridColumns : Math.min((Math.ceil(count / gridColumns) - 1) * gridColumns + col, count - 1); break;
+            case "down":  idx = idx + gridColumns < count ? idx + gridColumns : col; break;
         }
 
         keyboardFocusedIndex = idx;
@@ -272,8 +251,9 @@ PanelWindow {
     }
 
     function applyFocusedLayout() {
-        if (keyboardFocusedIndex >= 0 && keyboardFocusedIndex < layoutState.availableLayouts.length) {
-            applyLayout(layoutState.availableLayouts[keyboardFocusedIndex].code);
+        var layouts = layoutState.availableLayouts;
+        if (keyboardFocusedIndex >= 0 && keyboardFocusedIndex < layouts.length) {
+            applyLayout(layouts[keyboardFocusedIndex].code);
         }
     }
 
@@ -322,9 +302,9 @@ PanelWindow {
 
         Component.onCompleted: {
             forceActiveFocus();
-            var activeIdx = root.layouts.findIndex(l => l.code === root.activeLayout);
-            if (activeIdx >= 0) {
-                keyboardFocusedIndex = activeIdx;
+            var idx = root.layouts.findIndex(l => l.code === root.activeLayout);
+            if (idx >= 0) {
+                keyboardFocusedIndex = idx;
                 lastFocusMethod = "keyboard";
             }
         }
@@ -337,50 +317,26 @@ PanelWindow {
         }
 
         Keys.onPressed: event => {
-            switch (event.key) {
-                case Qt.Key_H:
-                case Qt.Key_Left:
-                    root.navigateKeyboard("left");
-                    event.accepted = true;
-                    break;
-                case Qt.Key_L:
-                case Qt.Key_Right:
-                    root.navigateKeyboard("right");
-                    event.accepted = true;
-                    break;
-                case Qt.Key_J:
-                case Qt.Key_Down:
-                    root.navigateKeyboard("down");
-                    event.accepted = true;
-                    break;
-                case Qt.Key_K:
-                case Qt.Key_Up:
-                    root.navigateKeyboard("up");
-                    event.accepted = true;
-                    break;
-                case Qt.Key_Return:
-                case Qt.Key_Space:
-                    if (root.keyboardFocusedIndex >= 0) {
-                        root.applyFocusedLayout();
-                    }
-                    event.accepted = true;
-                    break;
-                case Qt.Key_Escape:
-                    Qt.quit();
-                    event.accepted = true;
-                    break;
+            var key = event.key;
+            if (key === Qt.Key_H || key === Qt.Key_Left) root.navigateKeyboard("left");
+            else if (key === Qt.Key_L || key === Qt.Key_Right) root.navigateKeyboard("right");
+            else if (key === Qt.Key_J || key === Qt.Key_Down) root.navigateKeyboard("down");
+            else if (key === Qt.Key_K || key === Qt.Key_Up) root.navigateKeyboard("up");
+            else if ((key === Qt.Key_Return || key === Qt.Key_Space) && root.keyboardFocusedIndex >= 0) {
+                root.applyFocusedLayout();
             }
+            else Qt.quit();
+            event.accepted = true;
         }
 
-        ColumnLayout {
-            id: panelLayout
+            ColumnLayout {
+                id: panelLayout
 
-            anchors.fill: parent
-            anchors.margins: Config.panelMargin
-            spacing: Config.spacingL
+                anchors.fill: parent
+                anchors.margins: Config.panelMargin
+                spacing: Config.spacingL
 
-            // Header
-            Rectangle {
+                Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: headerRow.implicitHeight + Config.headerPadding
                 color: Config.cSurfaceVariant
@@ -818,7 +774,7 @@ PanelWindow {
                             return false;
                         }
                         property bool hovered: false
-                        readonly property bool isFocused: (root.lastFocusMethod === "keyboard" && index === root.keyboardFocusedIndex) || hovered
+                        readonly property bool isFocused: root.lastFocusMethod === "keyboard" ? index === root.keyboardFocusedIndex : hovered
 
                         width: (Config.panelWidth - Config.panelMargin * 2 - Config.spacingS * 2) / 3
                         height: Config.layoutBtnHeight
@@ -862,9 +818,13 @@ PanelWindow {
                             cursorShape: Qt.PointingHandCursor
                             onEntered: {
                                 layoutBtn.hovered = true;
+                                root.hoveredIndex = index;
                                 root.lastFocusMethod = "hover";
                             }
-                            onExited: layoutBtn.hovered = false
+                            onExited: {
+                                layoutBtn.hovered = false;
+                                if (root.hoveredIndex === index) root.hoveredIndex = -1;
+                            }
                             onClicked: root.applyLayout(modelData.code)
                         }
                     }
