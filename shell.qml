@@ -11,7 +11,7 @@ PanelWindow {
     color: "transparent"
 
     WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     WlrLayershell.namespace: "mango-layout-switcher"
     anchors.top: true
     anchors.bottom: true
@@ -213,7 +213,69 @@ PanelWindow {
         var mon = selectedMonitors.length > 0 ? selectedMonitors[0] : panelMonitor;
         return layoutState.monitorLayouts[mon] || "";
     }
-    readonly property real panelHeight: panelContent.implicitHeight + Config.panelMargin * 2
+    readonly property real panelHeight: panelLayout.implicitHeight + Config.panelMargin * 2
+
+    // Keyboard navigation state
+    property int keyboardFocusedIndex: -1
+    property string lastFocusMethod: "hover"
+    readonly property int gridColumns: 3
+
+    function navigateKeyboard(direction) {
+        var count = layoutState.availableLayouts.length;
+        if (count === 0) return;
+
+        var idx = keyboardFocusedIndex;
+        if (idx < 0 || idx >= count) {
+            var activeIdx = root.layouts.findIndex(l => l.code === root.activeLayout);
+            idx = activeIdx >= 0 ? activeIdx : 0;
+        }
+
+        var currentRow = Math.floor(idx / gridColumns);
+        var currentCol = idx % gridColumns;
+        var totalRows = Math.ceil(count / gridColumns);
+
+        switch (direction) {
+            case "left":
+                if (currentCol > 0) {
+                    idx--;
+                } else {
+                    idx = currentRow * gridColumns + (gridColumns - 1);
+                    if (idx >= count) idx = count - 1;
+                }
+                break;
+            case "right":
+                if (currentCol < gridColumns - 1 && idx + 1 < count) {
+                    idx++;
+                } else {
+                    idx = currentRow * gridColumns;
+                }
+                break;
+            case "up":
+                if (currentRow > 0) {
+                    idx -= gridColumns;
+                } else {
+                    idx = (totalRows - 1) * gridColumns + currentCol;
+                    if (idx >= count) idx = count - 1;
+                }
+                break;
+            case "down":
+                if (idx + gridColumns < count) {
+                    idx += gridColumns;
+                } else {
+                    idx = currentCol;
+                }
+                break;
+        }
+
+        keyboardFocusedIndex = idx;
+        lastFocusMethod = "keyboard";
+    }
+
+    function applyFocusedLayout() {
+        if (keyboardFocusedIndex >= 0 && keyboardFocusedIndex < layoutState.availableLayouts.length) {
+            applyLayout(layoutState.availableLayouts[keyboardFocusedIndex].code);
+        }
+    }
 
     function applyMonitorReorder(from, to) {
         if (from === to)
@@ -248,6 +310,7 @@ PanelWindow {
     }
 
     Rectangle {
+        id: panelContent
         anchors.centerIn: parent
         width: Config.panelWidth
         height: root.panelHeight
@@ -255,6 +318,16 @@ PanelWindow {
         radius: Config.panelRadius
         border.width: 1
         border.color: Config.cOutline
+        focus: true
+
+        Component.onCompleted: {
+            forceActiveFocus();
+            var activeIdx = root.layouts.findIndex(l => l.code === root.activeLayout);
+            if (activeIdx >= 0) {
+                keyboardFocusedIndex = activeIdx;
+                lastFocusMethod = "keyboard";
+            }
+        }
 
         MouseArea {
             anchors.fill: parent
@@ -263,8 +336,44 @@ PanelWindow {
             }
         }
 
+        Keys.onPressed: event => {
+            switch (event.key) {
+                case Qt.Key_H:
+                case Qt.Key_Left:
+                    root.navigateKeyboard("left");
+                    event.accepted = true;
+                    break;
+                case Qt.Key_L:
+                case Qt.Key_Right:
+                    root.navigateKeyboard("right");
+                    event.accepted = true;
+                    break;
+                case Qt.Key_J:
+                case Qt.Key_Down:
+                    root.navigateKeyboard("down");
+                    event.accepted = true;
+                    break;
+                case Qt.Key_K:
+                case Qt.Key_Up:
+                    root.navigateKeyboard("up");
+                    event.accepted = true;
+                    break;
+                case Qt.Key_Return:
+                case Qt.Key_Space:
+                    if (root.keyboardFocusedIndex >= 0) {
+                        root.applyFocusedLayout();
+                    }
+                    event.accepted = true;
+                    break;
+                case Qt.Key_Escape:
+                    Qt.quit();
+                    event.accepted = true;
+                    break;
+            }
+        }
+
         ColumnLayout {
-            id: panelContent
+            id: panelLayout
 
             anchors.fill: parent
             anchors.margins: Config.panelMargin
@@ -699,6 +808,7 @@ PanelWindow {
                         id: layoutBtn
 
                         required property var modelData
+                        required property int index
 
                         readonly property bool active: {
                             if (root.selectedMonitors.length === 0)
@@ -708,13 +818,14 @@ PanelWindow {
                             return false;
                         }
                         property bool hovered: false
+                        readonly property bool isFocused: (root.lastFocusMethod === "keyboard" && index === root.keyboardFocusedIndex) || hovered
 
                         width: (Config.panelWidth - Config.panelMargin * 2 - Config.spacingS * 2) / 3
                         height: Config.layoutBtnHeight
                         radius: Config.layoutBtnRadius
                         color: active ? Config.cPrimary : Config.cSurfaceVariant
-                        border.width: hovered && !active ? 2 : 1
-                        border.color: active ? Config.cPrimary : hovered ? Config.cPrimary : Config.cOutline
+                        border.width: isFocused && !active ? 2 : 1
+                        border.color: active ? Config.cPrimary : isFocused ? Config.cPrimary : Config.cOutline
 
                         Behavior on border.color {
                             ColorAnimation {
@@ -749,7 +860,10 @@ PanelWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onEntered: layoutBtn.hovered = true
+                            onEntered: {
+                                layoutBtn.hovered = true;
+                                root.lastFocusMethod = "hover";
+                            }
                             onExited: layoutBtn.hovered = false
                             onClicked: root.applyLayout(modelData.code)
                         }
