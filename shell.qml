@@ -22,7 +22,7 @@ PanelWindow {
     FileView {
         id: settingsFile
 
-        path: Quickshell.shellDir + "/mango-layout-switcher.json"
+        path: Quickshell.shellDir + "/settings.json"
         watchChanges: true
 
         JsonAdapter {
