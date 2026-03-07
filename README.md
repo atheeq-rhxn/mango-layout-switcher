@@ -5,10 +5,8 @@ A layout switcher panel for mango.
 ## Installation
 
 Clone the repository:
-
 ```bash
-cd ~/.config/quickshell
-git clone https://github.com/atheeq-rhxn/mango-layout-switcher.git
+git clone https://github.com/atheeq-rhxn/mango-layout-switcher.git ~/.config/quickshell/mango-layout-switcher
 ```
 
 Run with Quickshell:
@@ -17,6 +15,11 @@ Run with Quickshell:
 qs -c mango-layout-switcher
 ```
 
+## mango keybind:
+```ini
+bind=SUPER,s,spawn,qs -c mango-layout-switcher
+
+```
 ## Keyboard shortcuts
 
 - **h / Left**: Navigate left
