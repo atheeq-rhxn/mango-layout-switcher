@@ -1,6 +1,7 @@
 # mango-layout-switcher
 
 A layout switcher panel for mango.
+Also available as plugin for noctalia-shell: https://noctalia.dev/plugins/mangowc-layout-switcher/
 
 ## Installation
 
